@@ -4,67 +4,84 @@
   <title>Dynamic Incident Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
     #map {
-      height: 600px;
+      height: 100vh;
       width: 100%;
     }
   </style>
 </head>
 <body>
 
-<h2 style="text-align: center;">Incident Map (Dynamic)</h2>
 <div id="map"></div>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-  // Function to get URL parameters
-  function getQueryParams() {
-    const params = new URLSearchParams(window.location.search);
-    const latitudes = params.getAll('lat');
-    const longitudes = params.getAll('long');
-    const counts = params.getAll('count');
-    
-    const data = [];
-    for (let i = 0; i < latitudes.length; i++) {
-      data.push({
-        lat: parseFloat(latitudes[i]),
-        long: parseFloat(longitudes[i]),
-        count: parseInt(counts[i])
-      });
+  // Function to render the map with received data
+  function renderMap(incidentData) {
+    if (!incidentData || !incidentData.length) {
+      alert("No incident data received.");
+      return;
     }
-    return data;
+
+    const centerLat = incidentData[0].lat || 24.774265;
+    const centerLong = incidentData[0].long || 46.738586;
+
+    const map = L.map('map').setView([centerLat, centerLong], 6);
+
+    // Add OpenStreetMap base layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+    }).addTo(map);
+
+    // Add markers for each incident
+    incidentData.forEach((incident) => {
+      L.circleMarker([incident.lat, incident.long], {
+        radius: 5 + (incident.count / 10), // Adjust size
+        color: 'blue',
+        fillColor: '#0077ff',
+        fillOpacity: 0.6
+      })
+      .addTo(map)
+      .bindPopup(`
+        <b>${incident.state}</b><br>
+        Lat: ${incident.lat}<br>
+        Long: ${incident.long}<br>
+        Count: ${incident.count}
+      `);
+    });
   }
 
-  const incidentData = getQueryParams();
+  // Listen for data from parent window
+  window.addEventListener("message", function(event) {
+    try {
+      const { state, lat, long, count } = event.data;
 
-  // If no data, fallback to center
-  const centerLat = incidentData[0]?.lat || 24.774265;
-  const centerLong = incidentData[0]?.long || 46.738586;
+      if (state && lat && long && count) {
+        const incidentData = state.map((s, i) => ({
+          state: decodeURIComponent(s),
+          lat: parseFloat(lat[i]),
+          long: parseFloat(long[i]),
+          count: parseInt(count[i])
+        }));
 
-  const map = L.map('map').setView([centerLat, centerLong], 6);
-
-  // Add OpenStreetMap tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-  }).addTo(map);
-
-  // Add incident markers
-  incidentData.forEach(incident => {
-    L.circleMarker([incident.lat, incident.long], {
-      radius: 5 + incident.count,
-      color: 'blue',
-      fillColor: '#0077ff',
-      fillOpacity: 0.6
-    })
-    .addTo(map)
-    .bindPopup(`Lat: ${incident.lat}<br>Long: ${incident.long}<br>Count: ${incident.count}`);
-  });
+        renderMap(incidentData);
+      }
+    } catch (error) {
+      console.error("Failed to render map:", error);
+    }
+  }, false);
 </script>
 
 </body>
